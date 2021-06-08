@@ -28,6 +28,12 @@
     }
   }
 
+  const openYa = () =>
+    location = `https://yandex.ru/maps/1/moscow/search/${cleanCoords(input1.value)}/`;
+
+  const openGoo = () =>
+    location = `https://www.google.com/maps/search/${cleanCoords(input1.value)}/`;
+
   if (location.hash) {
     const coords = cleanCoords(location.hash);
     coords
@@ -63,7 +69,9 @@
 <body style="display: flex;flex-direction: column;">
   <h3>Впишите координаты:</h3>
   <input placeholder="37.786971,-122.399677" id="input1" />
-  <button onclick="openLink(cleanCoords(input1.value))">Открыть точку</button>
+  <button onclick="openLink(cleanCoords(input1.value))">Открыть в приложении</button>
   <button onclick="copyLink()">Скопировать ссылку</button>
   <button onclick="shareLink()">Поделиться ссылкой</button>
+  <button onclick="openYa()">Открыть в Яндекс-Картах</button>
+  <button onclick="openGoo()">Открыть в Гугл-Картах</button>
 </body>
