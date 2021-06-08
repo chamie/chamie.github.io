@@ -15,7 +15,9 @@
   }
 
   const openLink = coords => {
-    location = `geo:${coords}`;
+    location = navigator.platform.includes("iPhone") || navigator.platform.includes("iPad")
+      ? `//maps.apple.com/maps?q=${coords}`
+      : `geo:${coords}`;
   }
 
   const getLink = () => {
