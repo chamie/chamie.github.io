@@ -1,0 +1,69 @@
+<meta charset="utf8" />
+<title>GEO links redirect</title>
+<meta name="viewport" content="width=600, initial-scale=10">
+<script>
+  const shareLink = () => {
+    navigator.share({ title: "Example Page", url: getLink() });
+  }
+  const copyLink = () => {
+    navigator.clipboard.writeText(getLink());
+  }
+  const cleanCoords = text => {
+    const cleanText = text.replace("%20", "").replace(" ", "");
+    const match = cleanText.match(/([\d.,-\s]+)/);
+    return match ? match[1] : false;
+  }
+
+  const openLink = coords => {
+    location = `geo:${coords}`;
+  }
+
+  const getLink = () => {
+    const coords = cleanCoords(input1.value);
+    if (coords) {
+      return `${location.href.split("#")[0]}#${coords}`;
+    } else {
+      alert("Неверный формат координат. Правильный формат: 37.786971,-122.399677");
+      throw "Wrong format";
+    }
+  }
+
+  if (location.hash) {
+    const coords = cleanCoords(location.hash);
+    coords
+      ? openLink(coords)
+      : alert("Неверный формат ссылки. Правильный формат:  geo.htm#37.786971,-122.399677");
+  }
+</script>
+<style>
+  * {
+    min-height: 40px;
+    margin-bottom: 10px;
+    font-size: 7vw;
+  }
+
+  h3 {
+    display: flex;
+    align-items: center;
+  }
+
+  body {
+    height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    width: 100%;
+    padding: 10px;
+  }
+
+  body>* {
+    height: 25%;
+  }
+</style>
+
+<body style="display: flex;flex-direction: column;">
+  <h3>Впишите координаты:</h3>
+  <input placeholder="37.786971,-122.399677" id="input1" />
+  <button onclick="openLink(cleanCoords(input1.value))">Открыть точку</button>
+  <button onclick="copyLink()">Скопировать ссылку</button>
+  <button onclick="shareLink()">Поделиться ссылкой</button>
+</body>
