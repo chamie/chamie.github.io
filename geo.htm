@@ -45,7 +45,7 @@
   <label><input type="checkbox" id="shouldAutoRedirect">по ссылке сразу открывать</label>
   <span>Открыть в:</span>
   <a class="map-link" data-template="https://yandex.ru/maps/1/moscow/search/%s/">
-    <img src="https://maps.yandex.ru/favicon.ico"> Яндекс-Карты
+    <img src="https://maps.yandex.ru/favicon.ico"> Яндекс Карты
   </a>
   <a class="map-link" data-template="https://www.google.com/maps/search/%s/">
     <img src="https:////www.google.com/images/branding/product/ico/maps15_bnuw3a_32dp.ico">Google Maps
@@ -53,12 +53,17 @@
   <a class="map-link" data-template="https://wego.here.com/location/?map=%s">
     <img src="https://wego.here.com/favicon.ico"> Here Maps
   </a>
-  <a class="map-link" data-template="https://www.openstreetmap.org/?mlat=%lat&mlon=%long">
+  <a class="map-link" data-template="https://www.openstreetmap.org/?mlat=%lat&mlon=%lon">
     <img src="https://openstreetmap.org/favicon.ico"> OpenStreetMap
   </a>
-  <a class="map-link" data-template="https://www.waze.com/livemap/?zoom=9&lat=%lat&lon=%long">
+  <a class="map-link" data-template="https://www.waze.com/livemap/?zoom=9&lat=%lat&lon=%lon">
     <img src="https://www.waze.com/favicon.ico"> Waze
   </a>
+
+  <a class="map-link" data-template="yandexnavi://build_route_on_map?lat_to=%lat&lon_to=%lon">
+    <img src="https://www.waze.com/favicon.ico"> Яндекс Навигатор
+  </a>
+  
 
   <script>
     const shareLink = () => {
@@ -96,7 +101,7 @@
           a => a.href = a.dataset.template
             .replace("%s", coords)
             .replace("%lat", lat)
-            .replace("%long", long)
+            .replace("%lon", long)
         );
       }
     }
