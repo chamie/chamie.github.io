@@ -70,7 +70,7 @@
   </a>
   <a class="map-link" data-template="https:////maps.apple.com/maps?q=%s">
     <img src="https://www.apple.com/v/maps/b/images/overview/icon_map__czf4w78nqjsm_large.jpg"> Apple Maps
-  </a>  
+  </a>
 
   <script>
     const shareLink = () => {
@@ -88,6 +88,10 @@
 
     const openLink = coords => {
       location = `geo:${coords}`;
+      // iOS may support the "geo:" scheme but only if a supporting app is installed, i.e. Maps.ME
+      if (navigator.platform.includes("iPhone") || navigator.platform.includes("iPad")) {
+        location = `https:////maps.apple.com/maps?q=${coords}`;
+      }
     }
 
     const getLink = () => {
