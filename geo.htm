@@ -3,8 +3,10 @@
 <style>
   * {
     min-height: 40px;
+    min-width: 40px;
     margin-bottom: 10px;
     font-size: 7vw;
+    font-family: sans-serif;
   }
 
   h3 {
@@ -40,6 +42,7 @@
   <button onclick="openLink(cleanCoords(input1.value))">Открыть в приложении</button>
   <button onclick="copyLink()">Скопировать ссылку</button>
   <button onclick="shareLink()">Поделиться ссылкой</button>
+  <label><input type="checkbox" id="shouldAutoRedirect">по ссылке сразу открывать</label>
   <span>Открыть в:</span>
   <a class="map-link" data-template="https://yandex.ru/maps/1/moscow/search/%s/">
     <img src="https://maps.yandex.ru/favicon.ico"> Яндекс-Карты
@@ -63,6 +66,7 @@
     }
     const copyLink = () => {
       navigator.clipboard.writeText(getLink());
+      alert("Ссылка скопирована.");
     }
     const cleanCoords = text => {
       const cleanText = text.replace("%20", "").replace(" ", "");
@@ -77,7 +81,7 @@
     const getLink = () => {
       const coords = cleanCoords(input1.value);
       if (coords) {
-        return `${location.href.split("#")[0]}#${coords}`;
+        return `${location.href.split("#")[0]}#${coords}${shouldAutoRedirect.checked ? "&go!" : ""}`;
       } else {
         alert("Неверный формат координат. Правильный формат: 37.786971,-122.399677");
         throw "Wrong format";
@@ -102,7 +106,7 @@
       if (coords) {
         input1.value = coords;
         updateLinks();
-        if(location.hash.includes("&go!")){
+        if (location.hash.includes("&go!")) {
           openLink(coords);
         }
       } else {
