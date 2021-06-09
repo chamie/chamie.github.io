@@ -1,6 +1,5 @@
 <meta charset="utf8" />
 <title>GEO links redirect</title>
-<meta name="viewport" content="width=600, initial-scale=10">
 <script>
   const shareLink = () => {
     navigator.share({ title: "Example Page", url: getLink() });
@@ -15,9 +14,7 @@
   }
 
   const openLink = coords => {
-    location = navigator.platform.includes("iPhone") || navigator.platform.includes("iPad")
-      ? `//maps.apple.com/maps?q=${coords}`
-      : `geo:${coords}`;
+    location = `geo:${coords}`;
   }
 
   const getLink = () => {
@@ -56,7 +53,6 @@
   }
 
   body {
-    height: 100%;
     box-sizing: border-box;
     margin: 0;
     width: 100%;
@@ -64,7 +60,7 @@
   }
 
   body>* {
-    height: 25%;
+    height: 13vw;
   }
 </style>
 
