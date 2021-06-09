@@ -1,45 +1,5 @@
 <meta charset="utf8" />
 <title>GEO links redirect</title>
-<script>
-  const shareLink = () => {
-    navigator.share({ title: "Example Page", url: getLink() });
-  }
-  const copyLink = () => {
-    navigator.clipboard.writeText(getLink());
-  }
-  const cleanCoords = text => {
-    const cleanText = text.replace("%20", "").replace(" ", "");
-    const match = cleanText.match(/([\d.,-\s]+)/);
-    return match ? match[1] : false;
-  }
-
-  const openLink = coords => {
-    location = `geo:${coords}`;
-  }
-
-  const getLink = () => {
-    const coords = cleanCoords(input1.value);
-    if (coords) {
-      return `${location.href.split("#")[0]}#${coords}`;
-    } else {
-      alert("Неверный формат координат. Правильный формат: 37.786971,-122.399677");
-      throw "Wrong format";
-    }
-  }
-
-  const openYa = () =>
-    location = `https://yandex.ru/maps/1/moscow/search/${cleanCoords(input1.value)}/`;
-
-  const openGoo = () =>
-    location = `https://www.google.com/maps/search/${cleanCoords(input1.value)}/`;
-
-  if (location.hash) {
-    const coords = cleanCoords(location.hash);
-    coords
-      ? openLink(coords)
-      : alert("Неверный формат ссылки. Правильный формат:  geo.htm#37.786971,-122.399677");
-  }
-</script>
 <style>
   * {
     min-height: 40px;
@@ -62,6 +22,16 @@
   body>* {
     height: 13vw;
   }
+
+  img {
+    max-height: 32px;
+  }
+
+  /* @media (orientation: portrait) {
+    body {
+      border: 2px solid gold;
+    }
+  } */
 </style>
 
 <body style="display: flex;flex-direction: column;">
@@ -70,6 +40,78 @@
   <button onclick="openLink(cleanCoords(input1.value))">Открыть в приложении</button>
   <button onclick="copyLink()">Скопировать ссылку</button>
   <button onclick="shareLink()">Поделиться ссылкой</button>
-  <button onclick="openYa()">Открыть в Яндекс-Картах</button>
-  <button onclick="openGoo()">Открыть в Гугл-Картах</button>
+  <span>Открыть в:</span>
+  <a class="map-link" data-template="https://yandex.ru/maps/1/moscow/search/%s/">
+    <img src="https://maps.yandex.ru/favicon.ico"> Яндекс-Карты
+  </a>
+  <a class="map-link" data-template="https://www.google.com/maps/search/%s/">
+    <img src="https:////www.google.com/images/branding/product/ico/maps15_bnuw3a_32dp.ico">Google Maps
+  </a>
+  <a class="map-link" data-template="https://wego.here.com/location/?map=%s">
+    <img src="https://wego.here.com/favicon.ico"> Here Maps
+  </a>
+  <a class="map-link" data-template="https://www.openstreetmap.org/?mlat=%lat&mlon=%long">
+    <img src="https://openstreetmap.org/favicon.ico"> OpenStreetMap
+  </a>
+  <a class="map-link" data-template="https://www.waze.com/livemap/?zoom=9&lat=%lat&lon=%long">
+    <img src="https://www.waze.com/favicon.ico"> Waze
+  </a>
+
+  <script>
+    const shareLink = () => {
+      navigator.share({ title: "Example Page", url: getLink() });
+    }
+    const copyLink = () => {
+      navigator.clipboard.writeText(getLink());
+    }
+    const cleanCoords = text => {
+      const cleanText = text.replace("%20", "").replace(" ", "");
+      const match = cleanText.match(/([\d.,-\s]+)/);
+      return match ? match[1] : false;
+    }
+
+    const openLink = coords => {
+      location = `geo:${coords}`;
+    }
+
+    const getLink = () => {
+      const coords = cleanCoords(input1.value);
+      if (coords) {
+        return `${location.href.split("#")[0]}#${coords}`;
+      } else {
+        alert("Неверный формат координат. Правильный формат: 37.786971,-122.399677");
+        throw "Wrong format";
+      }
+    }
+
+    const updateLinks = () => {
+      const coords = cleanCoords(input1.value);
+      const [lat, long] = coords.split(",");
+      if (coords) {
+        document.querySelectorAll("a.map-link").forEach(
+          a => a.href = a.dataset.template
+            .replace("%s", coords)
+            .replace("%lat", lat)
+            .replace("%long", long)
+        );
+      }
+    }
+
+    if (location.hash) {
+      const coords = cleanCoords(location.hash);
+      if (coords) {
+        input1.value = coords;
+        updateLinks();
+        if(location.hash.includes("&go!")){
+          openLink(coords);
+        }
+      } else {
+        alert("Неверный формат ссылки. Правильный формат:  geo.htm#37.786971,-122.399677");
+      }
+    }
+
+    input1.onchange = updateLinks;
+    input1.onkeyup = updateLinks;
+    input1.onpaste = updateLinks;
+  </script>
 </body>
