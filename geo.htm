@@ -29,6 +29,10 @@
     max-height: 32px;
   }
 
+  input {
+    text-align: center;
+  }
+
   /* @media (orientation: portrait) {
     body {
       border: 2px solid gold;
@@ -42,13 +46,18 @@
   <button onclick="openLink(cleanCoords(input1.value))">Открыть в приложении</button>
   <button onclick="copyLink()">Скопировать ссылку</button>
   <button onclick="shareLink()">Поделиться ссылкой</button>
-  <label><input type="checkbox" id="shouldAutoRedirect">по ссылке сразу открывать</label>
+  <label><input type="checkbox" id="shouldAutoRedirect"> по ссылке сразу открывать</label>
   <span>Открыть в:</span>
   <a class="map-link" data-template="https://yandex.ru/maps/1/moscow/search/%s/">
     <img src="https://maps.yandex.ru/favicon.ico"> Яндекс Карты
   </a>
   <a class="map-link" data-template="https://www.google.com/maps/search/%s/">
     <img src="https:////www.google.com/images/branding/product/ico/maps15_bnuw3a_32dp.ico">Google Maps
+  </a>
+  <a class="map-link" data-template="yandexnavi://build_route_on_map?lat_to=%lat&lon_to=%lon">
+    <img
+      src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAxIiBoZWlnaHQ9IjEwMSIgdmlld0JveD0iMCAwIDEwMSAxMDEiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTI2LjU3MDUgMS43MzI0Mkg3NC4wNzI3Qzc4LjE3NTUgMS43MzI0MiA4MC4xMTA1IDEuNzM1NTMgODEuNzEzNiAxLjk4OTQ0QzkwLjY0NjMgMy40MDQyNCA5Ny42NTIxIDEwLjQxIDk5LjA2NjkgMTkuMzQyN0M5OS4zMjA4IDIwLjk0NTggOTkuMzIzOSAyMi44ODA4IDk5LjMyMzkgMjYuOTgzNlY3NC40ODU4Qzk5LjMyMzkgNzguNTg4NiA5OS4zMjA4IDgwLjUyMzUgOTkuMDY2OSA4Mi4xMjY3Qzk3LjY1MjEgOTEuMDU5NCA5MC42NDYzIDk4LjA2NTEgODEuNzEzNiA5OS40Nzk5QzgwLjExMDUgOTkuNzMzOSA3OC4xNzU1IDk5LjczNyA3NC4wNzI3IDk5LjczN0gyNi41NzA1QzIyLjQ2NzcgOTkuNzM3IDIwLjUzMjggOTkuNzMzOSAxOC45Mjk2IDk5LjQ3OTlDOS45OTY5MiA5OC4wNjUxIDIuOTkxMTUgOTEuMDU5NCAxLjU3NjM1IDgyLjEyNjdDMS4zMjI0NCA4MC41MjM1IDEuMzE5MzQgNzguNTg4NiAxLjMxOTM0IDc0LjQ4NThWMjYuOTgzNkMxLjMxOTM0IDIyLjg4MDggMS4zMjI0NCAyMC45NDU4IDEuNTc2MzUgMTkuMzQyN0MyLjk5MTE1IDEwLjQxIDkuOTk2OTIgMy40MDQyNCAxOC45Mjk2IDEuOTg5NDRDMjAuNTMyOCAxLjczNTUzIDIyLjQ2NzcgMS43MzI0MiAyNi41NzA1IDEuNzMyNDJaIiBzdHJva2U9IiNFMkUyRTIiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik04NC45NzExIDE2LjE2NDFMMTEuODQyOCA0NS44ODI4TDQzLjg0MzMgNTcuMzEwMkw1NS4yNzA4IDg5LjI5MjRMODQuOTcxMSAxNi4xNjQxWiIgZmlsbD0idXJsKCNwYWludDBfbGluZWFyKSIvPjxwYXRoIGQ9Ik04NC45NzE4IDE2LjE2NDFMNDIuNzAzMSA1OC40NTExTDU1LjI3MTUgODkuMjkyNEw4NC45NzE4IDE2LjE2NDFaIiBmaWxsPSIjRkZDQzAwIi8+PHBhdGggZD0iTTQxLjU2MTUgNTkuNTkyMUw1NS4yNzA4IDg5LjI5MjRMNTAuNjg4NyA1MC40NDY0TDExLjg0MjggNDUuODgyOEw0MS41NjE1IDU5LjU5MjFaIiBmaWxsPSIjRUNBNzA0Ii8+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJwYWludDBfbGluZWFyIiB4MT0iMTEuODQzMSIgeTE9Ijg5LjI5MSIgeDI9Ijg0Ljk3NDUiIHkyPSIxNi4xNTk2IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agc3RvcC1jb2xvcj0iI0ZGQ0MwMCIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI0ZGRTk5MiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==">
+    Яндекс Навигатор
   </a>
   <a class="map-link" data-template="https://wego.here.com/location/?map=%s">
     <img src="https://wego.here.com/favicon.ico"> Here Maps
@@ -59,11 +68,6 @@
   <a class="map-link" data-template="https://www.waze.com/livemap/?zoom=9&lat=%lat&lon=%lon">
     <img src="https://www.waze.com/favicon.ico"> Waze
   </a>
-
-  <a class="map-link" data-template="yandexnavi://build_route_on_map?lat_to=%lat&lon_to=%lon">
-    <img src="https://www.waze.com/favicon.ico"> Яндекс Навигатор
-  </a>
-  
 
   <script>
     const shareLink = () => {
