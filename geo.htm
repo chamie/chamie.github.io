@@ -118,8 +118,8 @@
 
     const updateLinks = () => {
       const coords = cleanCoords(input1.value);
-      const [lat, long] = coords.split(",");
       if (coords) {
+        const [lat, long] = coords.split(",");
         document.querySelectorAll("a.map-link").forEach(
           a => a.href = a.dataset.template
             .replace("%s", coords)
