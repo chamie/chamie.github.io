@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Buffer</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#111318">
+<style>
+  :root{
+    --bg:#111318; --surface:#1a1d26; --surface2:#20242f;
+    --text:#e9ebf0; --muted:#8b90a0; --accent:#7c9eff; --danger:#ff6b6b;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex; flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #capture{
+    padding:14px 16px 10px;
+    border-bottom:1px solid var(--surface2);
+  }
+  textarea{
+    width:100%; min-height:64px; max-height:40vh;
+    background:var(--surface); color:var(--text);
+    border:1px solid var(--surface2); border-radius:12px;
+    padding:12px 14px; font-size:17px; line-height:1.4;
+    resize:none; outline:none; font-family:inherit;
+  }
+  textarea:focus{border-color:var(--accent);}
+  #hint{
+    font-size:12px; color:var(--muted); margin-top:6px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  #attachRow{display:flex; gap:8px;}
+  .iconbtn{
+    background:var(--surface2); border:none; color:var(--text);
+    width:34px; height:34px; border-radius:8px; font-size:16px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .iconbtn:active{opacity:.6;}
+  #list{flex:1; overflow-y:auto; padding:8px 16px 24px;}
+  .note{
+    background:var(--surface); border-radius:12px;
+    padding:12px 14px; margin:10px 0; position:relative;
+  }
+  .note .txt{white-space:pre-wrap; word-break:break-word; font-size:15px;}
+  .note .meta{
+    margin-top:8px; font-size:11px; color:var(--muted);
+    display:flex; flex-wrap:wrap; gap:8px;
+  }
+  .note .meta span{white-space:nowrap;}
+  .note .del{
+    position:absolute; top:8px; right:10px; background:none; border:none;
+    color:var(--muted); font-size:13px; cursor:pointer; padding:4px;
+  }
+  .note .media{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;}
+  .note .media img, .note .media video{max-width:120px; max-height:120px; border-radius:8px; display:block;}
+  .note .media a{
+    font-size:12px; color:var(--accent); background:var(--surface2);
+    padding:6px 10px; border-radius:8px; text-decoration:none;
+  }
+  #topbar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 16px 0; font-size:13px; color:var(--muted);
+  }
+  #topbar button{
+    background:none; border:1px solid var(--surface2); color:var(--muted);
+    border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer;
+  }
+  #empty{color:var(--muted); text-align:center; margin-top:40px; font-size:14px;}
+  input[type=file]{display:none;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span id="count">0 заметок</span>
+  <button id="exportBtn">Экспорт JSON</button>
+</div>
+
+<div id="capture">
+  <textarea id="ta" placeholder="Пиши..." autofocus autocomplete="off" autocapitalize="sentences"></textarea>
+  <div id="hint">
+    <span>Enter — сохранить, Shift+Enter — новая строка</span>
+    <div id="attachRow">
+      <button class="iconbtn" id="btnFile" title="Файл">📎</button>
+      <button class="iconbtn" id="btnPhoto" title="Фото/видео">📷</button>
+      <button class="iconbtn" id="btnAudio" title="Голос">🎙️</button>
+    </div>
+  </div>
+  <input type="file" id="fileInput">
+  <input type="file" id="photoInput" accept="image/*,video/*" capture="environment">
+</div>
+
+<div id="list"><div id="empty">Пока пусто</div></div>
+
+<script>
+/* ---------- IndexedDB ---------- */
+const DB_NAME = 'adhd_buffer', DB_VER = 1, STORE = 'notes';
+let db;
+const openDB = () => {
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e=>{
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains(STORE)){
+        const os = d.createObjectStore(STORE, {keyPath:'id'});
+        os.createIndex('createdAt','createdAt');
+      }
+    };
+    req.onsuccess = e=>resolve(e.target.result);
+    req.onerror = e=>reject(e.target.error);
+  });
+}
+function tx(mode){ return db.transaction(STORE, mode).objectStore(STORE); }
+function putNote(note){
+  return new Promise((res,rej)=>{
+    const r = tx('readwrite').put(note);
+    r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);
+  });
+}
+function deleteNote(id){
+  return new Promise((res,rej)=>{
+    const r = tx('readwrite').delete(id);
+    r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);
+  });
+}
+function getAllNotes(){
+  return new Promise((res,rej)=>{
+    const r = tx('readonly').getAll();
+    r.onsuccess=()=>res(r.result.sort((a,b)=>b.createdAt-a.createdAt));
+    r.onerror=()=>rej(r.error);
+  });
+}
+
+/* ---------- Метаданные (не блокируют сохранение) ---------- */
+function id(){ return crypto.randomUUID(); }
+
+function deviceMeta(){
+  return {
+    ua: navigator.userAgent,
+    lang: navigator.language,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    screen: `${screen.width}x${screen.height}`,
+    platform: navigator.platform || null,
+  };
+}
+
+// Гео запрашивается один раз при загрузке страницы (не при каждой заметке),
+// последняя известная позиция кэшируется и подставляется в заметки,
+// созданные до первого ответа геолокации, — асинхронно, по получении.
+let lastGeo = null;
+function initGeoWatch(){
+  if(!('geolocation' in navigator)) return;
+  navigator.geolocation.watchPosition(
+    pos=>{ lastGeo = {lat:pos.coords.latitude, lon:pos.coords.longitude, acc:pos.coords.accuracy}; },
+    ()=>{ /* доступ не дан или недоступно — молча игнорируем, это не блокирует захват */ },
+    {enableHighAccuracy:false, maximumAge:60000, timeout:8000}
+  );
+}
+
+/* ---------- Рендер ---------- */
+const listEl = document.getElementById('list');
+const countEl = document.getElementById('count');
+
+function fmtTime(ts){
+  const d = new Date(ts);
+  return d.toLocaleString(undefined, {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+
+async function render(){
+  const notes = await getAllNotes();
+  countEl.textContent = `${notes.length} заметок`;
+  listEl.innerHTML = '';
+  if(notes.length === 0){
+    listEl.innerHTML = '<div id="empty">Пока пусто</div>';
+    return;
+  }
+  for(const n of notes){
+    const div = document.createElement('div');
+    div.className = 'note';
+    const metaParts = [`<span>${fmtTime(n.createdAt)}</span>`];
+    if(n.geo) metaParts.push(`<span>📍 ${n.geo.lat.toFixed(4)}, ${n.geo.lon.toFixed(4)}</span>`);
+    if(n.device && n.device.tz) metaParts.push(`<span>${n.device.tz}</span>`);
+    let mediaHtml = '';
+    if(n.attachment){
+      const a = n.attachment;
+      if(a.kind === 'image'){
+        mediaHtml = `<div class="media"><img src="${a.url}" alt=""></div>`;
+      } else if(a.kind === 'video'){
+        mediaHtml = `<div class="media"><video src="${a.url}" controls></video></div>`;
+      } else if(a.kind === 'audio'){
+        mediaHtml = `<div class="media"><audio src="${a.url}" controls style="width:100%"></audio></div>`;
+      } else {
+        mediaHtml = `<div class="media"><a href="${a.url}" download="${a.name||'file'}">📎 ${a.name||'файл'}</a></div>`;
+      }
+    }
+    div.innerHTML = `
+      <button class="del" data-id="${n.id}">✕</button>
+      <div class="txt"></div>
+      ${mediaHtml}
+      <div class="meta">${metaParts.join('')}</div>
+    `;
+    div.querySelector('.txt').textContent = n.text || '';
+    listEl.appendChild(div);
+  }
+  listEl.querySelectorAll('.del').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const noteId = btn.dataset.id;
+      const n = (await getAllNotes()).find(x=>x.id===noteId);
+      if(n && n.attachment && n.attachment.url) URL.revokeObjectURL(n.attachment.url);
+      await deleteNote(noteId);
+      render();
+    };
+  });
+}
+
+/* ---------- Сохранение заметки ---------- */
+async function saveNote(text, attachment){
+  text = text.trim();
+  if(!text && !attachment) return;
+  const note = {
+    id: id(),
+    text,
+    createdAt: Date.now(),
+    device: deviceMeta(),
+    geo: lastGeo,      // может быть null, если геоданные ещё не пришли — это ок
+    attachment: attachment || null,
+  };
+  await putNote(note);
+  await render();
+}
+
+/* ---------- Обработчики ввода ---------- */
+const ta = document.getElementById('ta');
+ta.addEventListener('keydown', e=>{
+  if(e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    const val = ta.value;
+    ta.value = '';
+    ta.style.height = 'auto';
+    saveNote(val, null);
+  }
+});
+ta.addEventListener('input', ()=>{
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, window.innerHeight*0.4) + 'px';
+});
+
+/* ---------- Вложения ---------- */
+function kindOf(mime){
+  if(mime.startsWith('image/')) return 'image';
+  if(mime.startsWith('video/')) return 'video';
+  if(mime.startsWith('audio/')) return 'audio';
+  return 'file';
+}
+function attachFromFile(file){
+  const url = URL.createObjectURL(file);
+  return { kind: kindOf(file.type), name: file.name, url, size: file.size };
+}
+
+document.getElementById('btnFile').onclick = ()=>document.getElementById('fileInput').click();
+document.getElementById('btnPhoto').onclick = ()=>document.getElementById('photoInput').click();
+
+document.getElementById('fileInput').onchange = e=>{
+  const f = e.target.files[0];
+  if(f) saveNote(ta.value, attachFromFile(f));
+  ta.value=''; e.target.value = '';
+};
+document.getElementById('photoInput').onchange = e=>{
+  const f = e.target.files[0];
+  if(f) saveNote(ta.value, attachFromFile(f));
+  ta.value=''; e.target.value = '';
+};
+
+/* Запись голоса в один клик: тап — старт, повторный тап — стоп и сохранить */
+let mediaRecorder = null, chunks = [], recording = false;
+document.getElementById('btnAudio').onclick = async ()=>{
+  const btn = document.getElementById('btnAudio');
+  if(!recording){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      chunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e=>chunks.push(e.data);
+      mediaRecorder.onstop = ()=>{
+        const blob = new Blob(chunks, {type:'audio/webm'});
+        const file = new File([blob], `voice-${Date.now()}.webm`, {type:'audio/webm'});
+        saveNote(ta.value, attachFromFile(file));
+        ta.value='';
+        stream.getTracks().forEach(t=>t.stop());
+      };
+      mediaRecorder.start();
+      recording = true;
+      btn.textContent = '⏺️';
+      btn.style.color = 'var(--danger)';
+    }catch(err){
+      alert('Нет доступа к микрофону');
+    }
+  } else {
+    mediaRecorder.stop();
+    recording = false;
+    btn.textContent = '🎙️';
+    btn.style.color = '';
+  }
+};
+
+/* ---------- Экспорт ---------- */
+document.getElementById('exportBtn').onclick = async ()=>{
+  const notes = await getAllNotes();
+  const plain = notes.map(n=>({...n, attachment: n.attachment ? {...n.attachment, url: undefined} : null}));
+  const blob = new Blob([JSON.stringify(plain, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `buffer-export-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+};
+
+/* ---------- Инициализация ---------- */
+(async function init(){
+  db = await openDB();
+  initGeoWatch();
+  await render();
+  ta.focus();
+})();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "Buffer",
+  "short_name": "Buffer",
+  "description": "Zero-friction distraction buffer",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111318",
+  "theme_color": "#111318",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
