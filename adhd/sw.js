@@ -1,4 +1,4 @@
-const CACHE = 'adhd-buffer-v2';
+const CACHE = 'adhd-buffer-v5';
 const ASSETS = ['./index.html', './manifest.json', './icon.svg', './style.css', './app.js'];
 
 self.addEventListener('install', e=>{

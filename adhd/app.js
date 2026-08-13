@@ -35,6 +35,43 @@ function getAllNotes(){
     r.onerror=()=>rej(r.error);
   });
 }
+function getNote(noteId){
+  return new Promise((res,rej)=>{
+    const r = tx('readonly').get(noteId);
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  });
+}
+
+/* ---------- OPFS: сами файлы вложений (не в IndexedDB) ---------- */
+// IndexedDB хранит только текст/метаданные + имя файла в OPFS.
+// Сами байты (фото/видео/голос) живут в Origin Private File System —
+// это отдельная файловая система происхождения, быстрее и без раздувания
+// основной БД тяжёлыми blob'ами.
+const OPFS_SUPPORTED = !!(navigator.storage && navigator.storage.getDirectory);
+let opfsRootPromise = null;
+function opfsRoot(){
+  if(!opfsRootPromise) opfsRootPromise = navigator.storage.getDirectory();
+  return opfsRootPromise;
+}
+async function opfsWrite(filename, blob){
+  const root = await opfsRoot();
+  const handle = await root.getFileHandle(filename, {create:true});
+  const writable = await handle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+}
+async function opfsRead(filename){
+  const root = await opfsRoot();
+  const handle = await root.getFileHandle(filename);
+  return await handle.getFile(); // File — сам объект, побайтово
+}
+async function opfsDelete(filename){
+  try{
+    const root = await opfsRoot();
+    await root.removeEntry(filename);
+  }catch(e){ /* уже удалён или не найден — не критично */ }
+}
 
 /* ---------- Метаданные (не блокируют сохранение) ---------- */
 function id(){
@@ -71,6 +108,15 @@ function initGeoWatch(){
 const listEl = document.getElementById('list');
 const countEl = document.getElementById('count');
 
+// object URL живёт только в рамках текущей вкладки/сессии, поэтому генерируем
+// заново из сохранённого Blob при каждом рендере и чистим предыдущие,
+// чтобы не текла память.
+let activeUrls = [];
+function revokeActiveUrls(){
+  activeUrls.forEach(u=>URL.revokeObjectURL(u));
+  activeUrls = [];
+}
+
 function fmtTime(ts){
   const d = new Date(ts);
   return d.toLocaleString(undefined, {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
@@ -78,6 +124,7 @@ function fmtTime(ts){
 
 async function render(){
   const notes = await getAllNotes();
+  revokeActiveUrls();
   countEl.textContent = `${notes.length} заметок`;
   listEl.innerHTML = '';
   if(notes.length === 0){
@@ -92,12 +139,21 @@ async function render(){
     if(n.device && n.device.tz) metaParts.push(`<span>${n.device.tz}</span>`);
     let mediaHtml = '';
     if(n.attachments && n.attachments.length){
-      mediaHtml = '<div class="media">' + n.attachments.map(a=>{
-        if(a.kind === 'image') return `<img src="${a.url}" alt="">`;
-        if(a.kind === 'video') return `<video src="${a.url}" controls></video>`;
-        if(a.kind === 'audio') return `<audio src="${a.url}" controls style="width:180px"></audio>`;
-        return `<a href="${a.url}" download="${a.name||'file'}">📎 ${a.name||'файл'}</a>`;
-      }).join('') + '</div>';
+      const parts = [];
+      for(const a of n.attachments){
+        let url;
+        try{
+          const file = await opfsRead(a.opfsName);
+          const typed = new Blob([file], {type: a.mime || file.type || ''});
+          url = URL.createObjectURL(typed);
+        }catch(e){ continue; } // файл потерян/недоступен — пропускаем молча
+        activeUrls.push(url);
+        if(a.kind === 'image') parts.push(`<img src="${url}" alt="">`);
+        else if(a.kind === 'video') parts.push(`<video src="${url}" controls></video>`);
+        else if(a.kind === 'audio') parts.push(`<audio src="${url}" controls style="width:180px"></audio>`);
+        else parts.push(`<a href="${url}" download="${a.name||'file'}">📎 ${a.name||'файл'}</a>`);
+      }
+      if(parts.length) mediaHtml = '<div class="media">' + parts.join('') + '</div>';
     }
     div.innerHTML = `
       <button class="del" data-id="${n.id}">✕</button>
@@ -111,8 +167,12 @@ async function render(){
   listEl.querySelectorAll('.del').forEach(btn=>{
     btn.onclick = async ()=>{
       const noteId = btn.dataset.id;
-      const n = (await getAllNotes()).find(x=>x.id===noteId);
-      if(n && n.attachments) n.attachments.forEach(a=>a.url && URL.revokeObjectURL(a.url));
+      const note = await getNote(noteId);
+      if(note && note.attachments){
+        for(const a of note.attachments){
+          if(a.opfsName) await opfsDelete(a.opfsName);
+        }
+      }
       await deleteNote(noteId);
       render();
     };
@@ -129,7 +189,7 @@ function kindOf(mime){
   return 'file';
 }
 function attachFromFile(file){
-  return { kind: kindOf(file.type), name: file.name, url: URL.createObjectURL(file), size: file.size };
+  return { kind: kindOf(file.type), name: file.name, url: URL.createObjectURL(file), size: file.size, blob: file };
 }
 
 const pendingEl = document.getElementById('pending');
@@ -161,17 +221,26 @@ function addToDraft(file){
 async function saveDraft(){
   const text = ta.value.trim();
   if(!text && draftAttachments.length === 0) return; // пустой черновик не сохраняем
+
+  const attachments = [];
+  for(const a of draftAttachments){
+    const opfsName = 'att-' + id(); // уникален независимо от исходного имени файла
+    await opfsWrite(opfsName, a.blob);
+    attachments.push({kind:a.kind, name:a.name, size:a.size, mime:a.blob.type, opfsName});
+  }
+
   const note = {
     id: id(),
     text,
     createdAt: Date.now(),
     device: deviceMeta(),
     geo: lastGeo, // может быть null, если геоданные ещё не пришли — это ок
-    attachments: draftAttachments.map(({kind,name,url,size})=>({kind,name,url,size})),
+    attachments,
   };
   await putNote(note);
   ta.value = '';
   ta.style.height = 'auto';
+  draftAttachments.forEach(a=>URL.revokeObjectURL(a.url));
   draftAttachments = [];
   renderPending();
   await render();
@@ -241,7 +310,7 @@ document.getElementById('btnAudio').onclick = async ()=>{
 /* ---------- Экспорт ---------- */
 document.getElementById('exportBtn').onclick = async ()=>{
   const notes = await getAllNotes();
-  const plain = notes.map(n=>({...n, attachments: (n.attachments||[]).map(a=>({...a, url: undefined}))}));
+  const plain = notes.map(n=>({...n, attachments: (n.attachments||[]).map(({kind,name,size})=>({kind,name,size}))}));
   const blob = new Blob([JSON.stringify(plain, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -253,6 +322,17 @@ document.getElementById('exportBtn').onclick = async ()=>{
 (async function init(){
   db = await openDB();
   initGeoWatch();
+  if(!OPFS_SUPPORTED){
+    // Без OPFS вложениям хранить байты негде (фолбэк в IndexedDB сознательно
+    // не делаем — он не выдерживает реальную нагрузку). Отключаем только
+    // кнопки вложений, текстовый захват при этом не страдает.
+    ['btnFile','btnPhoto','btnAudio'].forEach(id=>{
+      const el = document.getElementById(id);
+      el.disabled = true;
+      el.title = 'Вложения недоступны: браузер не поддерживает OPFS (нужен HTTPS/localhost + современный браузер)';
+      el.style.opacity = '.35';
+    });
+  }
   await render();
   ta.focus();
 })();
