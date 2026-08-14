@@ -1,13 +1,22 @@
-Zero-friction interruptions buffer/log for managing ADHD.
-Intended for installation as a PWA app.
-You just open it when distracted from your current task, write down what you can about that distracting idea and get back to your task.
-You don't have to worry it's gone now, and you don't have to enter anything your PC/phone could tell about that moment - you geolocation, time, day, etc.
-Or you can just attach a file, a picture, a new camera shot, a voice note..
-And don't worry, it doesn't go anywhere, it's all stored in the browser storage on your device and your device only: in text and metadata in [indexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API), attachments in [OPFS](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)
-And you can export it to a file too.
-No registration required, no app stores, no trust, no friction.
-All the permissions are only requested when needed, but you can also just request and save them all with one button, so they won't cause friction when you use the app.
+# Zero-Friction Interruption Buffer
 
-Roadmap:
-1. Add Zip-file export, so that the attachments get in there too.
-2. Add sync: connect 2 or more devices using WebRTC: you just share a "room" key (enter manually or scan a QR code) and they will sync each time they're both online.
+A zero-friction interruption buffer/log for managing ADHD.
+
+It's intended to be installed as a PWA. When you get distracted from your current task, you just open it, write down whatever you can about the distracting idea, and get back to your task.
+
+You don't have to worry about forgetting it, and you don't have to enter anything your PC or phone could already tell you about that moment—your geolocation, time, day, etc.
+
+Or you can simply attach a file, a picture, a new camera shot, a voice note, etc.
+
+And don't worry: nothing goes anywhere. Everything is stored in the browser storage on your device, and your device only: text and metadata in [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API), and attachments in [OPFS](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system).
+
+You can export it to a file, too.
+
+No registration required. No app stores. No trust. No friction.
+
+Permissions are only requested when needed, but you can also request and save them all with one button so they won't cause friction when you use the app.
+
+## Roadmap
+
+1. Add ZIP-file export, so attachments are included too.
+2. Add sync: connect two or more devices using WebRTC. You simply share a "room" key (enter it manually or scan a QR code), and the devices sync whenever they're both online.
