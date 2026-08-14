@@ -44,6 +44,8 @@
     display:flex; flex-wrap:wrap; gap:8px;
   }
   .note .meta span{white-space:nowrap;}
+  .note .meta a{color:var(--accent); text-decoration:none;}
+  .note .meta a:active{opacity:.6;}
   .note .del{
     position:absolute; top:8px; right:10px; background:none; border:none;
     color:var(--muted); font-size:13px; cursor:pointer; padding:4px;
@@ -64,6 +66,18 @@
   }
   #empty{color:var(--muted); text-align:center; margin-top:40px; font-size:14px;}
   input[type=file]{display:none;}
+  #permPanel{
+    margin:10px 16px 0; padding:12px 14px; background:var(--surface);
+    border-radius:12px; font-size:13px;
+  }
+  .permRow{display:flex; justify-content:space-between; padding:5px 0; color:var(--text);}
+  .permStatus{color:var(--muted);}
+  .permStatus.ok{color:#6ddb8f;}
+  .permStatus.no{color:var(--danger);}
+  #permRequestAll{
+    margin-top:8px; width:100%; padding:8px; border:none; border-radius:8px;
+    background:var(--accent); color:#111; font-size:13px; cursor:pointer;
+  }
   #pending{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
   #pending:empty{margin-top:0;}
   .pchip{

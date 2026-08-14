@@ -10,5 +10,21 @@
   "orientation": "portrait",
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Новая голосовая заметка",
+      "short_name": "Голос",
+      "description": "Сразу начать запись голоса",
+      "url": "./index.html?action=voice",
+      "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Быстрое фото",
+      "short_name": "Фото",
+      "description": "Сразу открыть камеру",
+      "url": "./index.html?action=photo",
+      "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
   ]
 }

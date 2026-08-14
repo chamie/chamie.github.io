@@ -1,5 +1,5 @@
 /* ---------- IndexedDB ---------- */
-const DB_NAME = 'adhd_buffer', DB_VER = 1, STORE = 'notes';
+const DB_NAME = 'adhd_buffer', DB_VER = 2, STORE = 'notes', DRAFT_STORE = 'drafts';
 let db;
 function openDB(){
   return new Promise((resolve, reject)=>{
@@ -10,12 +10,16 @@ function openDB(){
         const os = d.createObjectStore(STORE, {keyPath:'id'});
         os.createIndex('createdAt','createdAt');
       }
+      if(!d.objectStoreNames.contains(DRAFT_STORE)){
+        d.createObjectStore(DRAFT_STORE, {keyPath:'id'});
+      }
     };
     req.onsuccess = e=>resolve(e.target.result);
     req.onerror = e=>reject(e.target.error);
   });
 }
 function tx(mode){ return db.transaction(STORE, mode).objectStore(STORE); }
+function draftTx(mode){ return db.transaction(DRAFT_STORE, mode).objectStore(DRAFT_STORE); }
 function putNote(note){
   return new Promise((res,rej)=>{
     const r = tx('readwrite').put(note);
@@ -40,6 +44,27 @@ function getNote(noteId){
     const r = tx('readonly').get(noteId);
     r.onsuccess=()=>res(r.result);
     r.onerror=()=>rej(r.error);
+  });
+}
+
+const DRAFT_ID = 'current';
+function putDraft(draft){
+  return new Promise((res,rej)=>{
+    const r = draftTx('readwrite').put({...draft, id: DRAFT_ID});
+    r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);
+  });
+}
+function getDraft(){
+  return new Promise((res,rej)=>{
+    const r = draftTx('readonly').get(DRAFT_ID);
+    r.onsuccess=()=>res(r.result||null);
+    r.onerror=()=>rej(r.error);
+  });
+}
+function clearDraft(){
+  return new Promise((res,rej)=>{
+    const r = draftTx('readwrite').delete(DRAFT_ID);
+    r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);
   });
 }
 
@@ -104,6 +129,21 @@ function initGeoWatch(){
   );
 }
 
+// Уровень заряда — как напоминание о контексте ("писал почти при разряде"),
+// не как интерпретация усталости. Battery Status API уже выпилен из
+// Firefox/Safari по privacy-соображениям, поэтому строго feature-detect
+// и тихо ничего не делаем, если API нет.
+let lastBattery = null;
+function initBatteryWatch(){
+  if(!('getBattery' in navigator)) return;
+  navigator.getBattery().then(bat=>{
+    const update = ()=>{ lastBattery = {level: Math.round(bat.level*100), charging: bat.charging}; };
+    update();
+    bat.addEventListener('levelchange', update);
+    bat.addEventListener('chargingchange', update);
+  }).catch(()=>{});
+}
+
 /* ---------- Рендер ---------- */
 const listEl = document.getElementById('list');
 const countEl = document.getElementById('count');
@@ -122,6 +162,18 @@ function fmtTime(ts){
   return d.toLocaleString(undefined, {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
 }
 
+function geoLink(lat, lon, label){
+  let q = `${lat},${lon}`;
+  if(label){
+    // короткая подпись к пину; переносы строк схлопываем, текст энкодим,
+    // сами координаты и скобки оставляем как есть — так их понимают
+    // обработчики geo: на практике (Google Maps и большинство остальных)
+    const short = label.replace(/\s+/g, ' ').trim().slice(0, 60);
+    if(short) q += `(${encodeURIComponent(short)})`;
+  }
+  return `geo:${lat},${lon}?q=${q}`;
+}
+
 async function render(){
   const notes = await getAllNotes();
   revokeActiveUrls();
@@ -135,8 +187,9 @@ async function render(){
     const div = document.createElement('div');
     div.className = 'note';
     const metaParts = [`<span>${fmtTime(n.createdAt)}</span>`];
-    if(n.geo) metaParts.push(`<span>📍 ${n.geo.lat.toFixed(4)}, ${n.geo.lon.toFixed(4)}</span>`);
+    if(n.geo) metaParts.push(`<span>📍 <a href="${geoLink(n.geo.lat, n.geo.lon, n.text)}">geo: ${n.geo.lat.toFixed(4)}, ${n.geo.lon.toFixed(4)}</a></span>`);
     if(n.device && n.device.tz) metaParts.push(`<span>${n.device.tz}</span>`);
+    if(n.battery) metaParts.push(`<span>${n.battery.charging ? '🔌' : '🔋'} ${n.battery.level}%</span>`);
     let mediaHtml = '';
     if(n.attachments && n.attachments.length){
       const parts = [];
@@ -180,16 +233,17 @@ async function render(){
 }
 
 /* ---------- Черновик: текст + вложения копятся до явного сохранения ---------- */
-let draftAttachments = []; // [{kind,name,url,size,blob}]
+// Вложения пишутся в OPFS СРАЗУ при захвате (не дожидаясь "Сохранить") —
+// если приложение убьют посреди набора текста, файл всё равно уже на диске.
+// Текст черновика льётся в IndexedDB с debounce, чтобы пережить любой краш/
+// закрытие/переключение на другое приложение без потери мысли.
+let draftAttachments = []; // [{kind,name,size,mime,opfsName,url}]
 
 function kindOf(mime){
   if(mime.startsWith('image/')) return 'image';
   if(mime.startsWith('video/')) return 'video';
   if(mime.startsWith('audio/')) return 'audio';
   return 'file';
-}
-function attachFromFile(file){
-  return { kind: kindOf(file.type), name: file.name, url: URL.createObjectURL(file), size: file.size, blob: file };
 }
 
 const pendingEl = document.getElementById('pending');
@@ -203,17 +257,56 @@ function renderPending(){
     return `<div class="pchip">${inner}<div class="rm" data-i="${i}">✕</div></div>`;
   }).join('');
   pendingEl.querySelectorAll('.rm').forEach(btn=>{
-    btn.onclick = ()=>{
+    btn.onclick = async ()=>{
       const i = +btn.dataset.i;
-      URL.revokeObjectURL(draftAttachments[i].url);
+      const a = draftAttachments[i];
+      URL.revokeObjectURL(a.url);
+      await opfsDelete(a.opfsName); // файл уже был записан при захвате — чистим
       draftAttachments.splice(i, 1);
       renderPending();
+      persistDraft();
     };
   });
 }
 
-function addToDraft(file){
-  draftAttachments.push(attachFromFile(file));
+// Файл пишется в OPFS немедленно, до всякого нажатия "Сохранить".
+async function addToDraft(file){
+  const opfsName = 'att-' + id();
+  await opfsWrite(opfsName, file);
+  draftAttachments.push({
+    kind: kindOf(file.type), name: file.name, size: file.size,
+    mime: file.type, opfsName, url: URL.createObjectURL(file),
+  });
+  renderPending();
+  persistDraft();
+}
+
+/* ---------- Автосохранение черновика в IndexedDB (debounce) ---------- */
+let draftSaveTimer = null;
+function persistDraft(){
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(()=>{
+    putDraft({
+      text: ta.value,
+      attachments: draftAttachments.map(({kind,name,size,mime,opfsName})=>({kind,name,size,mime,opfsName})),
+      updatedAt: Date.now(),
+    });
+  }, 400);
+}
+
+async function restoreDraft(){
+  const draft = await getDraft();
+  if(!draft) return;
+  ta.value = draft.text || '';
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, window.innerHeight*0.4) + 'px';
+  for(const a of (draft.attachments || [])){
+    try{
+      const file = await opfsRead(a.opfsName);
+      const typed = new Blob([file], {type: a.mime || file.type || ''});
+      draftAttachments.push({...a, url: URL.createObjectURL(typed)});
+    }catch(e){ /* файл потерян — молча пропускаем эту одну позицию */ }
+  }
   renderPending();
 }
 
@@ -222,22 +315,21 @@ async function saveDraft(){
   const text = ta.value.trim();
   if(!text && draftAttachments.length === 0) return; // пустой черновик не сохраняем
 
-  const attachments = [];
-  for(const a of draftAttachments){
-    const opfsName = 'att-' + id(); // уникален независимо от исходного имени файла
-    await opfsWrite(opfsName, a.blob);
-    attachments.push({kind:a.kind, name:a.name, size:a.size, mime:a.blob.type, opfsName});
-  }
+  // Файлы уже лежат в OPFS с момента захвата — просто ссылаемся на них,
+  // повторно ничего не пишем.
+  const attachments = draftAttachments.map(({kind,name,size,mime,opfsName})=>({kind,name,size,mime,opfsName}));
 
   const note = {
     id: id(),
     text,
     createdAt: Date.now(),
     device: deviceMeta(),
-    geo: lastGeo, // может быть null, если геоданные ещё не пришли — это ок
+    geo: lastGeo,         // может быть null, если геоданные ещё не пришли — это ок
+    battery: lastBattery, // аналогично — null, если API недоступен или ещё не ответил
     attachments,
   };
   await putNote(note);
+  await clearDraft();
   ta.value = '';
   ta.style.height = 'auto';
   draftAttachments.forEach(a=>URL.revokeObjectURL(a.url));
@@ -259,6 +351,7 @@ ta.addEventListener('keydown', e=>{
 ta.addEventListener('input', ()=>{
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, window.innerHeight*0.4) + 'px';
+  persistDraft();
 });
 
 document.getElementById('btnSave').onclick = saveDraft;
@@ -267,12 +360,12 @@ document.getElementById('btnSave').onclick = saveDraft;
 document.getElementById('btnFile').onclick = ()=>document.getElementById('fileInput').click();
 document.getElementById('btnPhoto').onclick = ()=>document.getElementById('photoInput').click();
 
-document.getElementById('fileInput').onchange = e=>{
-  Array.from(e.target.files).forEach(addToDraft);
+document.getElementById('fileInput').onchange = async e=>{
+  for(const f of e.target.files) await addToDraft(f);
   e.target.value = '';
 };
-document.getElementById('photoInput').onchange = e=>{
-  Array.from(e.target.files).forEach(addToDraft);
+document.getElementById('photoInput').onchange = async e=>{
+  for(const f of e.target.files) await addToDraft(f);
   e.target.value = ''; // input можно нажимать повторно, чтобы добавить ещё кадр
 };
 
@@ -286,10 +379,10 @@ document.getElementById('btnAudio').onclick = async ()=>{
       chunks = [];
       mediaRecorder = new MediaRecorder(stream);
       mediaRecorder.ondataavailable = e=>chunks.push(e.data);
-      mediaRecorder.onstop = ()=>{
+      mediaRecorder.onstop = async ()=>{
         const blob = new Blob(chunks, {type:'audio/webm'});
         const file = new File([blob], `voice-${Date.now()}.webm`, {type:'audio/webm'});
-        addToDraft(file);
+        await addToDraft(file);
         stream.getTracks().forEach(t=>t.stop());
       };
       mediaRecorder.start();
@@ -307,6 +400,49 @@ document.getElementById('btnAudio').onclick = async ()=>{
   }
 };
 
+/* ---------- Онбординг: явная кнопка "Разрешения" (не блокирует стартовый экран) ---------- */
+document.getElementById('permBtn').onclick = ()=>{
+  document.getElementById('permPanel').hidden = !document.getElementById('permPanel').hidden;
+};
+
+function setPermStatus(name, ok){
+  const el = document.querySelector(`.permStatus[data-perm="${name}"]`);
+  el.textContent = ok ? '✓' : '✕';
+  el.className = 'permStatus ' + (ok ? 'ok' : 'no');
+}
+
+async function requestGeoPerm(){
+  if(!('geolocation' in navigator)){ setPermStatus('geo', false); return; }
+  return new Promise(res=>{
+    navigator.geolocation.getCurrentPosition(
+      ()=>{ setPermStatus('geo', true); res(); },
+      ()=>{ setPermStatus('geo', false); res(); }
+    );
+  });
+}
+async function requestMicPerm(){
+  if(!navigator.mediaDevices){ setPermStatus('mic', false); return; }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    stream.getTracks().forEach(t=>t.stop()); // сразу глушим — нужно было только разрешение
+    setPermStatus('mic', true);
+  }catch(e){ setPermStatus('mic', false); }
+}
+async function requestNotifPerm(){
+  if(!('Notification' in window)){ setPermStatus('notif', false); return; }
+  try{
+    const res = await Notification.requestPermission();
+    setPermStatus('notif', res === 'granted');
+  }catch(e){ setPermStatus('notif', false); }
+}
+
+// Последовательно, не пачкой — так их не блокирует ни один браузерный движок.
+document.getElementById('permRequestAll').onclick = async ()=>{
+  await requestGeoPerm();
+  await requestMicPerm();
+  await requestNotifPerm();
+};
+
 /* ---------- Экспорт ---------- */
 document.getElementById('exportBtn').onclick = async ()=>{
   const notes = await getAllNotes();
@@ -322,6 +458,7 @@ document.getElementById('exportBtn').onclick = async ()=>{
 (async function init(){
   db = await openDB();
   initGeoWatch();
+  initBatteryWatch();
   if(!OPFS_SUPPORTED){
     // Без OPFS вложениям хранить байты негде (фолбэк в IndexedDB сознательно
     // не делаем — он не выдерживает реальную нагрузку). Отключаем только
@@ -333,8 +470,23 @@ document.getElementById('exportBtn').onclick = async ()=>{
       el.style.opacity = '.35';
     });
   }
+  await restoreDraft(); // если приложение упало/закрылось посреди набора — вернём как было
   await render();
   ta.focus();
+
+  // App Shortcuts (long-press по иконке): сразу падаем в нужное действие,
+  // минуя обычный UI. Работает только если OPFS/пермишены доступны —
+  // иначе просто останемся на обычном экране захвата.
+  const action = new URLSearchParams(location.search).get('action');
+  if(action === 'voice' && OPFS_SUPPORTED){
+    document.getElementById('btnAudio').click();
+  } else if(action === 'photo' && OPFS_SUPPORTED){
+    document.getElementById('btnPhoto').click();
+  }
+  if(action){
+    // чистим query, чтобы обновление страницы не запускало действие повторно
+    history.replaceState(null, '', location.pathname);
+  }
 })();
 
 if('serviceWorker' in navigator){

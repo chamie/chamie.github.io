@@ -13,7 +13,17 @@
 
 <div id="topbar">
   <span id="count">0 заметок</span>
-  <button id="exportBtn">Экспорт JSON</button>
+  <div style="display:flex; gap:8px;">
+    <button id="permBtn">Разрешения</button>
+    <button id="exportBtn">Экспорт JSON</button>
+  </div>
+</div>
+
+<div id="permPanel" hidden>
+  <div class="permRow"><span>📍 Геолокация</span><span class="permStatus" data-perm="geo">—</span></div>
+  <div class="permRow"><span>🎙️ Микрофон</span><span class="permStatus" data-perm="mic">—</span></div>
+  <div class="permRow"><span>🔔 Уведомления</span><span class="permStatus" data-perm="notif">—</span></div>
+  <button id="permRequestAll">Запросить всё</button>
 </div>
 
 <div id="capture">
