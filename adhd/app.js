@@ -18,55 +18,70 @@ function openDB(){
     req.onerror = e=>reject(e.target.error);
   });
 }
-function tx(mode){ return db.transaction(STORE, mode).objectStore(STORE); }
-function draftTx(mode){ return db.transaction(DRAFT_STORE, mode).objectStore(DRAFT_STORE); }
-function putNote(note){
+// Открываем БД сразу при загрузке скрипта, а не только внутри init().
+// Обработчики (Ctrl+Enter, input) навешиваются синхронно и могут сработать
+// раньше, чем откроется БД — особенно на самом первом запуске, когда
+// нужно создавать object store в onupgradeneeded. Все функции ниже ждут
+// именно этот промис, а не полагаются на то, что глобальная `db` к моменту
+// вызова уже проставлена — так гонка исключена в принципе.
+const dbReady = openDB().then(d => { db = d; return d; });
+async function tx(mode){ await dbReady; return db.transaction(STORE, mode).objectStore(STORE); }
+async function draftTx(mode){ await dbReady; return db.transaction(DRAFT_STORE, mode).objectStore(DRAFT_STORE); }
+async function putNote(note){
+  const store = await tx('readwrite');
   return new Promise((res,rej)=>{
-    const r = tx('readwrite').put(note);
+    const r = store.put(note);
     r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);
   });
 }
-function deleteNote(id){
+async function deleteNote(id){
+  const store = await tx('readwrite');
   return new Promise((res,rej)=>{
-    const r = tx('readwrite').delete(id);
+    const r = store.delete(id);
     r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);
   });
 }
-function getAllNotes(){
+async function getAllNotes(){
+  const store = await tx('readonly');
   return new Promise((res,rej)=>{
-    const r = tx('readonly').getAll();
+    const r = store.getAll();
     r.onsuccess=()=>res(r.result.sort((a,b)=>b.createdAt-a.createdAt));
     r.onerror=()=>rej(r.error);
   });
 }
-function getNote(noteId){
+async function getNote(noteId){
+  const store = await tx('readonly');
   return new Promise((res,rej)=>{
-    const r = tx('readonly').get(noteId);
+    const r = store.get(noteId);
     r.onsuccess=()=>res(r.result);
     r.onerror=()=>rej(r.error);
   });
 }
 
 const DRAFT_ID = 'current';
-function putDraft(draft){
+async function putDraft(draft){
+  const store = await draftTx('readwrite');
   return new Promise((res,rej)=>{
-    const r = draftTx('readwrite').put({...draft, id: DRAFT_ID});
+    const r = store.put({...draft, id: DRAFT_ID});
     r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);
   });
 }
-function getDraft(){
+async function getDraft(){
+  const store = await draftTx('readonly');
   return new Promise((res,rej)=>{
-    const r = draftTx('readonly').get(DRAFT_ID);
+    const r = store.get(DRAFT_ID);
     r.onsuccess=()=>res(r.result||null);
     r.onerror=()=>rej(r.error);
   });
 }
-function clearDraft(){
+async function clearDraft(){
+  const store = await draftTx('readwrite');
   return new Promise((res,rej)=>{
-    const r = draftTx('readwrite').delete(DRAFT_ID);
+    const r = store.delete(DRAFT_ID);
     r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);
   });
 }
+
 
 /* ---------- OPFS: сами файлы вложений (не в IndexedDB) ---------- */
 // IndexedDB хранит только текст/метаданные + имя файла в OPFS.
@@ -456,7 +471,7 @@ document.getElementById('exportBtn').onclick = async ()=>{
 
 /* ---------- Инициализация ---------- */
 (async function init(){
-  db = await openDB();
+  await dbReady; // соединение уже открывается с момента загрузки скрипта — просто ждём его
   initGeoWatch();
   initBatteryWatch();
   if(!OPFS_SUPPORTED){
